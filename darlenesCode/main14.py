@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+#version 14
 
 import smbus2 as smbus  #used by the Gyro
 import math             #used by the Gyro
@@ -17,18 +17,15 @@ LEFTECHO = 36 #16
 RIGHTTRIG = 15 #22
 RIGHTECHO = 16 #23
 
-
 # Vibration Motors Pins
 FrontVM = 22 #25
 BackVM = 29 #5
 LeftVM = 40 #21
 RightVM = 31 #6
 
-
 # Gyro Power management registers
 power_mgmt_1 = 0x6b
 power_mgmt_2 = 0x6c
-
 
 #General Setup/Destroy code
 def setup():
@@ -39,7 +36,6 @@ def setup():
    setupUltraSonicSensors()
    # the Gyro doesn't need a setup
 
-
 def destroy():
    print("Exiting...")
    vmdestroy(FrontVM)
@@ -48,7 +44,6 @@ def destroy():
    vmdestroy(RightVM)
    GPIO.cleanup()
    print("Exited successfully")
-
 
 # Code for Ultrasonic Sensors
 def setupUltraSonicSensors():
@@ -62,16 +57,13 @@ def setupUltraSonicSensors():
    GPIO.setup(RIGHTTRIG, GPIO.OUT)
    GPIO.setup(RIGHTECHO, GPIO.IN)
 
-
 def getDistance(TRIG, ECHO):
 	GPIO.output(TRIG, 0)
 	time.sleep(0.000002)
 
-
 	GPIO.output(TRIG, 1)
 	time.sleep(0.25)
 	GPIO.output(TRIG, 0)
-
 
 	while GPIO.input(ECHO) == 0:
 		a = 0
@@ -83,20 +75,17 @@ def getDistance(TRIG, ECHO):
 	during = time2 - time1
 	return during * 340 / 2 * 100
 
-
 #code for the vibration Motors
 def setupBuzzer(pin):
    GPIO.setmode(GPIO.BOARD)       # Numbers GPIOs by physical location
    GPIO.setup(pin, GPIO.OUT)
    GPIO.output(pin, GPIO.LOW)
 
-
 def vmdestroy(vm):
    GPIO.output(vm, GPIO.LOW)
   
 def vmOn(vm):
    GPIO.output(vm, GPIO.HIGH)
-
 
 def vmOff(vm):
    GPIO.output(vm, GPIO.LOW)
@@ -107,31 +96,26 @@ def speak(text):
 def VMbeep(vm, x):
 	while x > 0:
 		vmOn(vm)
-		time.sleep(1)
+		time.sleep(.25)
 		vmOff(vm)
-		time.sleep(1)
+		time.sleep(.25)
 		x -= 1
-
 
 # Code for the Gyro
 bus = smbus.SMBus(1) # or bus = smbus.SMBus(1) for Revision 2 boards
 address = 0x68       # This is the address value read via the i2cdetect command
 
-
 # Now wake the 6050 up as it starts in sleep mode
 bus.write_byte_data(address, power_mgmt_1, 0)
 
-
 def read_byte(adr):
    return bus.read_byte_data(address, adr)
-
 
 def read_word(adr):
    high = bus.read_byte_data(address, adr)
    low = bus.read_byte_data(address, adr+1)
    val = (high << 8) + low
    return val
-
 
 def read_word_2c(adr):
 	val = read_word(adr)
@@ -140,15 +124,12 @@ def read_word_2c(adr):
 	else:
 		return val
 
-
 def dist(a,b):
    return math.sqrt((a*a)+(b*b))
-
 
 def get_y_rotation(x,y,z):
    radians = math.atan2(x, dist(y,z))
    return -math.degrees(radians)
-
 
 def get_x_rotation(x,y,z):
    radians = math.atan2(y, dist(x,z))
@@ -164,105 +145,117 @@ def calcLevel(distance, speed):
 	else:
 		return 0
 
-toutputs = []
 def testDanger(sideDist, SpeedS, testGyro, SideVM, speak_message):
-	if  ((calcLevel(sideDist, SpeedS)== 1) or (sideDist > 400 and sideDist < 800)) and (testGyro):
-		VMbeep(SideVM, 1)
-	if  ((calcLevel(sideDist, SpeedS) == 2) or (sideDist > 200 and sideDist < 400)) and (testGyro):
-		VMbeep(SideVM, 2)
-	if  ((calcLevel(sideDist, SpeedS) == 3) or (sideDist < 200)) and (testGyro):
-		VMbeep(SideVM, 3)
-		speak(speak_message)
-	toutputs.append(time.time())
-	
-def getSpeed(round, side):
+	if((abs(SpeedS >= 1)) and testGyro):
+		if  ((calcLevel(sideDist, SpeedS)== 1) or (sideDist > 400 and sideDist < 800)):
+			VMbeep(SideVM, 1)
+			return
+		if  ((calcLevel(sideDist, SpeedS) == 2) or (sideDist > 200 and sideDist < 400)):
+			VMbeep(SideVM, 2)
+			return
+		if  ((calcLevel(sideDist, SpeedS) == 3) or (sideDist < 200)):
+			speak(speak_message)
+			VMbeep(SideVM, 3)
+
+# returns 0 if round one, then returns speed for each following round
+def getSpeed(rounds, side):
+	global distances
+	global toutputs
 	speed = 0
-	if(round > 1):
+	if(rounds > 1):
 		speed = (distances[side][-1] - distances[side][-2])/(toutputs[side][-1] - toutputs[side][-2])
 	return speed
 
-def printLine(strSide, dis, speed):
-	print (strSide, 'Distance: ', dis, 'cm', strSide, 'Speed: ', speed, 'cm/sec')
+# prints to the terminal the distance and the speed
+def printLine(strSide, dis, speed): 
+	print(strSide, 'Distance: ', dis, 'cm', 'Speed: ', speed, 'cm/sec')
 
-distances = [[],[],[],[]]   # Front, Back, Left, Right
+rounds = 0
+distances = [[],[],[],[]]
+toutputs = [[],[],[],[]]
+gyros = [[],[],[]]
 def loop():
-	round = 0
-	usoutputs = []                          #Array to store values for US
-	
-	speedF = speedB = speedL = speedR = 0
+	global rounds
 	testGyro = True
-	toutputs = [[],[],[],[]]  # Front, Back, Left, Right
+	speedF = speedB = speedL = speedR = 0
+	global toutputs  # Front, Back, Left, Right
+	global distances   # Front, Back, Left, Right
+	usf = 0
+	usb = 1
+	usl = 2
+	usr = 3
+	global gyros
+	gx = 0
+	gy =1
+	gz = 2
 
-	while True:
-		round += 1
-		print('')
-		print("\nRound: ", round)
+	while True:  #continuously Repeating code
+		rounds = 1 + rounds
+		print("\nRound: ", rounds)
+		sleepLength = .25
 	   	   
 		frontDistance = getDistance(FRONTTRIG, FRONTECHO)
-		distances[0].append(frontDistance)
-		toutputs[0].append(time.time())
-		speedF = getSpeed(round,0)
+		distances[usf].append(frontDistance)
+		toutputs[usf].append(time.time())
+		speedF = getSpeed(rounds,0)
 		printLine('Front', frontDistance,speedF)
 		#print ('FRONT DISTANCE: ', frontDistance, 'cm','Front speed',speedF,'cm/s')
 		testDanger(frontDistance, speedF, testGyro, FrontVM, f"Watch your Front")
-		time.sleep(0.25)
+		time.sleep(sleepLength)
 	   
 		backDistance = getDistance(BACKTRIG, BACKECHO)
-		distances[1].append(backDistance)
-		toutputs[1].append(time.time())
-		speedB = getSpeed(round,1)
+		distances[usb].append(backDistance)
+		toutputs[usb].append(time.time())
+		speedB = getSpeed(rounds,1)
 		printLine('Back',backDistance,speedB)
 		#print ('BACK Distance', backDistance, 'cm')
-		testDanger(backDistance, speedB, testGyro, FrontVM, f"Behind you")
-		time.sleep(0.25)
+		testDanger(backDistance, speedB, testGyro, BackVM, f"Behind you")
+		time.sleep(sleepLength)
 		  
 		leftDistance = getDistance(LEFTTRIG, LEFTECHO)
-		distances[2].append(leftDistance)
-		toutputs[2].append(time.time())
-		speedL = getSpeed(round,2)
-		printLine('Left', backDistance,speedB)
+		distances[usl].append(leftDistance)
+		toutputs[usl].append(time.time())
+		speedL = getSpeed(rounds,2)
+		printLine('Left', leftDistance,speedL)
 		#print ('LEFT', leftDistance, 'cm')
-		testDanger(leftDistance, speedL, testGyro, BackVM, f"On your left")
-		time.sleep(0.25)
+		testDanger(leftDistance, speedL, testGyro, LeftVM, f"On your left")
+		time.sleep(sleepLength)
 		  
 		rightDistance = getDistance(RIGHTTRIG, RIGHTECHO)
-		distances[3].append(rightDistance)
-		toutputs[3].append(time.time())
-		speedR = getSpeed(round,3)
+		distances[usr].append(rightDistance)
+		toutputs[usr].append(time.time())
+		speedR = getSpeed(rounds,3)
 		printLine('Right',rightDistance,speedR)
 		#print ('RIGHT', rightDistance, 'cm')
 		testDanger(rightDistance, speedR, testGyro, RightVM, f"On your right")
-		time.sleep(0.25)
-	   
-	  
-		current_time = time.time()
-		time_diff = (current_time - last_time)
-		uscurrent = [frontDistance, backDistance, leftDistance, rightDistance] #------
-		usoutputs.append(uscurrent)
+		time.sleep(sleepLength)
 	   	  
 		
 	   
 		gyro_xout = read_word_2c(0x43)
 		gyro_yout = read_word_2c(0x45)
+		gyro_zout = read_word_2c(0x47)
 	  
-		xgyro = (gyro_xout / 131)
-		ygyro = (gyro_yout / 131)
+		gyros[gx].append(gyro_xout / 131)
+		gyros[gy].append(gyro_yout / 131)
+		gyros[gz].append(gyro_zout / 131)
+	   
+		#print("xGyro value: ", gyros[gx][-1])
+		#print("yGyro value: ", gyros[gy][-1])
+		print("zGyro value: ", gyros[gz][-1])
+		print("")
 
-		current = [xgyro, ygyro]
-		outputs.append(current)
+		
 	   
-		print("\nxGyro value: ", xgyro)
-		print("yGyro value: ", ygyro)
-		print("\n")
-	   
-		if len(outputs) > 1:
-			deltaX = abs(outputs[-2][0]) - (outputs[-1][0])
-			deltaY = abs(outputs[-2][1]) - (outputs[-1][1])
-		   
-			print("\nDeltaX value: ", deltaX)
-			print("DeltaY value: ", deltaY)
+		if rounds > 1:
+			deltaX = abs(gyros[gx][-2]) - (gyros[gx][-1])
+			deltaY = abs(gyros[gy][-2]) - (gyros[gy][-1])
+			deltaZ = abs(gyros[gz][-2]) - (gyros[gz][-1])
+
+			#print("DeltaX value: ", deltaX)
+			#print("DeltaY value: ", deltaY)
+			print("DeltaZ value: ", deltaZ)
 			print("\n")
-		   
 			if (deltaX > 40) or (deltaY > 40):
 				testGyro = False
 				print("gyro in range")
