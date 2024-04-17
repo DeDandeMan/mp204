@@ -7,7 +7,7 @@ import time             #used by everything
 import RPi.GPIO as GPIO #used by the Ultrasonic sensor and Vibration motor
 import subprocess       #used by text to speech
 
-#UltraSonic Sensors GPIO slots
+#UltraSonic Sensors GPIO slots - the value is the number for the software side, the commented out number is the GPIO slot number.
 FRONTTRIG = 11 #17
 FRONTECHO = 12 #18
 BACKTRIG = 37 #26
@@ -17,7 +17,7 @@ LEFTECHO = 36 #16
 RIGHTTRIG = 15 #22
 RIGHTECHO = 16 #23
 
-# Vibration Motors Pins
+# Vibration Motors Pins - the value is the number for the software side, the commented out number is the GPIO slot number.
 FrontVM = 22 #25
 BackVM = 29 #5
 LeftVM = 40 #21
@@ -36,6 +36,7 @@ def setup():
    setupUltraSonicSensors()
    # the Gyro doesn't need a setup
 
+# The code to close out the RAM and other stuff being used by this code
 def destroy():
    print("Exiting...")
    vmdestroy(FrontVM)
@@ -45,7 +46,9 @@ def destroy():
    GPIO.cleanup()
    print("Exited successfully")
 
-# Code for Ultrasonic Sensors
+# ----------  Code for Ultrasonic Sensors  ----------
+
+# This will setup the ultra sonic sensors
 def setupUltraSonicSensors():
    GPIO.setmode(GPIO.BOARD)
    GPIO.setup(FRONTTRIG, GPIO.OUT)
@@ -57,6 +60,10 @@ def setupUltraSonicSensors():
    GPIO.setup(RIGHTTRIG, GPIO.OUT)
    GPIO.setup(RIGHTECHO, GPIO.IN)
 
+# getDistance() gets the distance as obtained by an ultrasonic sensor
+# TRIG - the trig value for the sensor to get the distance from
+# ECHO - the echo value for the sensor to get the distance from
+# returns the distance in cm
 def getDistance(TRIG, ECHO):
 	GPIO.output(TRIG, 0)
 	time.sleep(0.000002)
@@ -75,24 +82,31 @@ def getDistance(TRIG, ECHO):
 	during = time2 - time1
 	return during * 340 / 2 * 100
 
-#code for the vibration Motors
+#---------  code for the vibration Motors  ----------
+
+#setupBuzzer() tells the raspberry pi how to communicate with the passed in Vibration Motor
 def setupBuzzer(pin):
-   GPIO.setmode(GPIO.BOARD)       # Numbers GPIOs by physical location
+   GPIO.setmode(GPIO.BOARD)       
    GPIO.setup(pin, GPIO.OUT)
    GPIO.output(pin, GPIO.LOW)
 
+# Clears the space the Vibration Motors used for other things 
 def vmdestroy(vm):
    GPIO.output(vm, GPIO.LOW)
   
+# Turns the Vibration Motor on
 def vmOn(vm):
    GPIO.output(vm, GPIO.HIGH)
 
+# Turns the Vibration Motor off
 def vmOff(vm):
    GPIO.output(vm, GPIO.LOW)
 
+# outputs the text-to-speech of the passed in text
 def speak(text):
 	subprocess.run(["espeak", text])
-	
+
+# turns the Vibration Motor off and on
 def VMbeep(vm, x):
 	while x > 0:
 		vmOn(vm)
@@ -101,11 +115,11 @@ def VMbeep(vm, x):
 		time.sleep(.25)
 		x -= 1
 
-# Code for the Gyro
-bus = smbus.SMBus(1) # or bus = smbus.SMBus(1) for Revision 2 boards
-address = 0x68       # This is the address value read via the i2cdetect command
+# ----------  Code for the Gyro  ----------
 
-# Now wake the 6050 up as it starts in sleep mode
+# Gyro setup code
+bus = smbus.SMBus(1)
+address = 0x68 
 bus.write_byte_data(address, power_mgmt_1, 0)
 
 def read_byte(adr):
@@ -135,6 +149,9 @@ def get_x_rotation(x,y,z):
    radians = math.atan2(y, dist(x,z))
    return math.degrees(radians)
 
+# ----------  360 Hat code  ----------
+
+# calcLevel() takes a distance and a speed and returns a danger level from 0 to 3
 def calcLevel(distance, speed):
 	if (speed < 72.860686 and speed > 5) and distance < 200:
 		return 1
@@ -145,7 +162,13 @@ def calcLevel(distance, speed):
 	else:
 		return 0
 
-def testDanger(sideDist, SpeedS, testGyro, SideVM, speak_message):
+# doOutput() manages the outputs according to the inputs
+# sideDist - the distance of side 's'
+# SpeedS - the speed of side 's'
+# testGyro - the value of whether the gyro has turned significantly
+# SideVM - the corresponding Vibration Motor to side 's'
+# speak_message - the text that will get sent to the text to speech if danger level is high enough#
+def doOutput(sideDist, SpeedS, testGyro, SideVM, speak_message):
 	if((abs(SpeedS >= 1)) and testGyro):
 		if  ((calcLevel(sideDist, SpeedS)== 1) or (sideDist > 400 and sideDist < 800)):
 			VMbeep(SideVM, 1)
@@ -174,6 +197,8 @@ rounds = 0
 distances = [[],[],[],[]]
 toutputs = [[],[],[],[]]
 gyros = [[],[],[]]
+
+#Main body of code that will repeat as long as the hat is on
 def loop():
 	global rounds
 	testGyro = True
@@ -199,8 +224,7 @@ def loop():
 		toutputs[usf].append(time.time())
 		speedF = getSpeed(rounds,0)
 		printLine('Front', frontDistance,speedF)
-		#print ('FRONT DISTANCE: ', frontDistance, 'cm','Front speed',speedF,'cm/s')
-		testDanger(frontDistance, speedF, testGyro, FrontVM, f"Watch your Front")
+		doOutput(frontDistance, speedF, testGyro, FrontVM, f"Watch your Front")
 		time.sleep(sleepLength)
 	   
 		backDistance = getDistance(BACKTRIG, BACKECHO)
@@ -208,8 +232,7 @@ def loop():
 		toutputs[usb].append(time.time())
 		speedB = getSpeed(rounds,1)
 		printLine('Back',backDistance,speedB)
-		#print ('BACK Distance', backDistance, 'cm')
-		testDanger(backDistance, speedB, testGyro, BackVM, f"Behind you")
+		doOutput(backDistance, speedB, testGyro, BackVM, f"Behind you")
 		time.sleep(sleepLength)
 		  
 		leftDistance = getDistance(LEFTTRIG, LEFTECHO)
@@ -217,8 +240,7 @@ def loop():
 		toutputs[usl].append(time.time())
 		speedL = getSpeed(rounds,2)
 		printLine('Left', leftDistance,speedL)
-		#print ('LEFT', leftDistance, 'cm')
-		testDanger(leftDistance, speedL, testGyro, LeftVM, f"On your left")
+		doOutput(leftDistance, speedL, testGyro, LeftVM, f"On your left")
 		time.sleep(sleepLength)
 		  
 		rightDistance = getDistance(RIGHTTRIG, RIGHTECHO)
@@ -226,8 +248,7 @@ def loop():
 		toutputs[usr].append(time.time())
 		speedR = getSpeed(rounds,3)
 		printLine('Right',rightDistance,speedR)
-		#print ('RIGHT', rightDistance, 'cm')
-		testDanger(rightDistance, speedR, testGyro, RightVM, f"On your right")
+		doOutput(rightDistance, speedR, testGyro, RightVM, f"On your right")
 		time.sleep(sleepLength)
 	   	  
 		
