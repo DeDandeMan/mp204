@@ -105,3 +105,5 @@ def vmOff(vm):
 # outputs the text-to-speech of the passed in text
 def speak(text):
 	subprocess.run(["espeak", text])
+     
+print("testing the code for this project, Im actually trying to get this to show up through github")
