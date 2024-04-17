@@ -177,8 +177,9 @@ def doOutput(sideDist, SpeedS, testGyro, SideVM, speak_message):
 			VMbeep(SideVM, 2)
 			return
 		if  ((calcLevel(sideDist, SpeedS) == 3) or (sideDist < 200)):
-			speak(speak_message)
 			VMbeep(SideVM, 3)
+			speak(speak_message)
+			
 
 # returns 0 if round one, then returns speed for each following round
 def getSpeed(rounds, side):
