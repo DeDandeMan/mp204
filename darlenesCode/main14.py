@@ -262,9 +262,8 @@ def loop():
 		gyros[gy].append(gyro_yout / 131)
 		gyros[gz].append(gyro_zout / 131)
 	   
-		#print("xGyro value: ", gyros[gx][-1])
-		#print("yGyro value: ", gyros[gy][-1])
-		print("zGyro value: ", gyros[gz][-1])
+		print("xGyro value: ", gyros[gx][-1])
+		print("yGyro value: ", gyros[gy][-1])
 		print("")
 
 		
@@ -274,9 +273,8 @@ def loop():
 			deltaY = abs(gyros[gy][-2]) - (gyros[gy][-1])
 			deltaZ = abs(gyros[gz][-2]) - (gyros[gz][-1])
 
-			#print("DeltaX value: ", deltaX)
-			#print("DeltaY value: ", deltaY)
-			print("DeltaZ value: ", deltaZ)
+			print("DeltaX value: ", deltaX)
+			print("DeltaY value: ", deltaY)
 			print("\n")
 			if (deltaX > 40) or (deltaY > 40):
 				testGyro = False
